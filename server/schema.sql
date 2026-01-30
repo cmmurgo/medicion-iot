@@ -1,0 +1,32 @@
+CREATE DATABASE IF NOT EXISTS medicion_iot;
+USE medicion_iot;
+
+CREATE TABLE IF NOT EXISTS tenants (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    domain VARCHAR(255) UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS layouts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id INT NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    data JSON NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS sensors (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    tenant_id INT NOT NULL,
+    external_id VARCHAR(255) NOT NULL,
+    name VARCHAR(255),
+    type VARCHAR(100),
+    unit VARCHAR(20),
+    FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE
+);
+
+-- Initial data
+INSERT INTO tenants (name, domain) VALUES ('Empresa Demo', 'demo.iot.com');
