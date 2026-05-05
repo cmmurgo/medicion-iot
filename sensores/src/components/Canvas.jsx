@@ -128,13 +128,18 @@ const DeleteButton = ({ x, y, onDelete }) => (
 );
 
 const IoTCanvas = () => {
+    // Estados de datos
+    const [layouts, setLayouts] = useState([]);
+    const [currentLayout, setCurrentLayout] = useState(null);
     const [objects, setObjects] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // Estados de Editor
     const [history, setHistory] = useState([[]]);
     const [historyStep, setHistoryStep] = useState(0);
     const [selectedId, setSelectedId] = useState(null);
     const [scale, setScale] = useState(1);
     const [position, setPosition] = useState({ x: 0, y: 0 });
-    const [loading, setLoading] = useState(true);
     const [showGrid, setShowGrid] = useState(true);
 
     // Estado para Notificaciones y Modales
@@ -144,6 +149,84 @@ const IoTCanvas = () => {
     const showToast = (message, type = 'success') => {
         setToast({ message, type });
         setTimeout(() => setToast(null), 3000);
+    };
+
+    // Cargar todas las salas al inicio
+    const fetchLayouts = () => {
+        setLoading(true);
+        fetch(`${API_URL}/tenants/${DEFAULT_TENANT_ID}/layouts`)
+            .then(res => res.json())
+            .then(data => {
+                const sorted = Array.isArray(data) ? [...data].sort((a, b) => b.id - a.id) : [];
+                setLayouts(sorted);
+                setLoading(false);
+            })
+            .catch(() => setLoading(false));
+    };
+
+    useEffect(() => {
+        fetchLayouts();
+    }, []);
+
+    const openLayout = (layout) => {
+        setCurrentLayout(layout);
+        setObjects(layout.data || []);
+        setHistory([layout.data || []]);
+        setHistoryStep(0);
+        setSelectedId(null);
+    };
+
+    const createNewLayout = () => {
+        setModal({
+            open: true,
+            title: 'Nueva Sala',
+            value: '',
+            isConfirm: false,
+            onConfirm: async (name) => {
+                if (!name) return showToast('El nombre es obligatorio', 'error');
+                const newLayout = {
+                    tenant_id: DEFAULT_TENANT_ID,
+                    name: name,
+                    data: [] // Enviamos el array vacío
+                };
+                try {
+                    const res = await fetch(`${API_URL}/layouts`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(newLayout)
+                    });
+                    const data = await res.json();
+
+                    if (res.ok) {
+                        showToast(`Sala "${name}" creada`);
+                        fetchLayouts();
+                        openLayout(data);
+                    } else {
+                        // Si hay errores de validación (por ejemplo, nombre duplicado)
+                        const errorMsg = Array.isArray(data) ? data[0].message : (data.message || 'Error de validación');
+                        showToast(errorMsg, 'error');
+                    }
+                } catch (err) {
+                    showToast('Error de conexión con el servidor', 'error');
+                }
+            }
+        });
+    };
+
+    const saveLayout = async () => {
+        if (!currentLayout) return;
+        try {
+            const response = await fetch(`${API_URL}/layouts/${currentLayout.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...currentLayout, data: objects }),
+            });
+            if (response.ok) {
+                showToast('Cambios guardados');
+                // Actualizar la lista localmente sin recargar todo
+                setLayouts(layouts.map(l => l.id === currentLayout.id ? { ...l, data: objects } : l));
+            }
+        } catch (err) { showToast('Error al conectar con el servidor', 'error'); }
     };
 
     const updateObjects = (newObjects) => {
@@ -170,46 +253,22 @@ const IoTCanvas = () => {
         }
     };
 
-    useEffect(() => {
-        fetch(`${API_URL}/tenants/${DEFAULT_TENANT_ID}/layouts`)
-            .then(res => res.json())
-            .then(data => {
-                let initialObjects = [];
-                if (data && data.length > 0) {
-                    initialObjects = data[data.length - 1].data;
-                } else {
-                    initialObjects = [
-                        { id: '1', type: 'tank', x: 200, y: 200, width: 80, height: 120, level: 65, name: 'Tanque A' },
-                        { id: 'l1', type: 'line', points: [100, 100, 500, 100] }
-                    ];
-                }
-                setObjects(initialObjects);
-                setHistory([initialObjects]);
-                setLoading(false);
-            })
-            .catch(err => { setLoading(false); });
-    }, []);
-
-    const saveLayout = async () => {
-        try {
-            const response = await fetch(`${API_URL}/layouts`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tenant_id: DEFAULT_TENANT_ID, name: 'Principal Layout', data: objects }),
-            });
-            if (response.ok) showToast('Diseño guardado exitosamente');
-        } catch (err) { showToast('Error al conectar con el servidor', 'error'); }
-    };
-
-    const handleWheel = (e) => {
-        e.evt.preventDefault();
-        const stage = e.target.getStage();
-        const oldScale = stage.scaleX();
-        const pointer = stage.getPointerPosition();
-        const mousePointTo = { x: (pointer.x - stage.x()) / oldScale, y: (pointer.y - stage.y()) / oldScale };
-        const newScale = e.evt.deltaY > 0 ? oldScale * 0.9 : oldScale * 1.1;
-        setScale(newScale);
-        setPosition({ x: pointer.x - mousePointTo.x * newScale, y: pointer.y - mousePointTo.y * newScale });
+    const deleteLayout = async (id) => {
+        setModal({
+            open: true,
+            title: '¿Eliminar sala?',
+            value: 'Esta acción no se puede deshacer.',
+            isConfirm: true,
+            onConfirm: async () => {
+                try {
+                    const res = await fetch(`${API_URL}/layouts/${id}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        showToast('Sala eliminada correctamente');
+                        fetchLayouts();
+                    }
+                } catch (err) { showToast('Error al eliminar', 'error'); }
+            }
+        });
     };
 
     const deleteObject = (id) => {
@@ -229,8 +288,6 @@ const IoTCanvas = () => {
         });
     };
 
-    if (loading) return <div className="p-10 text-white font-bold animate-pulse">Cargando dashboard...</div>;
-
     const getOffset = () => (objects.length % 10) * 15;
 
     const gridLines = [];
@@ -245,128 +302,192 @@ const IoTCanvas = () => {
         }
     }
 
+    // EVENTOS DE NAVEGACIÓN
+    const handleWheel = (e) => {
+        e.evt.preventDefault();
+        const stage = e.target.getStage();
+        const oldScale = stage.scaleX();
+        const pointer = stage.getPointerPosition();
+        const mousePointTo = { x: (pointer.x - stage.x()) / oldScale, y: (pointer.y - stage.y()) / oldScale };
+        const newScale = e.evt.deltaY > 0 ? oldScale * 0.9 : oldScale * 1.1;
+        setScale(newScale);
+        setPosition({ x: pointer.x - mousePointTo.x * newScale, y: pointer.y - mousePointTo.y * newScale });
+    };
+
+    if (loading) return <div className="p-20 text-blue-400 font-bold text-2xl flex flex-col items-center gap-4 animate-pulse"><Maximize size={48} className="animate-spin" /> Cargando Sistema...</div>;
+
     return (
-        <div className="w-full h-full bg-slate-900 overflow-hidden relative border border-slate-700 rounded-lg shadow-2xl">
-            {/* Modal de Edición Personalizado */}
+        <div className="w-full h-screen bg-slate-900 overflow-hidden relative border border-slate-700 rounded-lg shadow-2xl flex flex-col">
+
+            {/* VISTA CONDICIONAL: LOBBY O EDITOR */}
+            {!currentLayout ? (
+                /* --- VISTA LISTADO DE SALAS --- */
+                <div className="w-full h-full p-10 overflow-y-auto">
+                    <div className="max-w-5xl mx-auto">
+                        <header className="flex justify-between items-center mb-8 bg-slate-800/40 p-6 rounded-2xl border border-slate-800">
+                            <div>
+                                <h1 className="text-3xl font-black text-white tracking-tighter uppercase leading-none mb-1">Panel de Control</h1>
+                                <p className="text-slate-500 font-medium tracking-wide">Gestión de Salas y Planos IoT</p>
+                            </div>
+                            <button
+                                onClick={createNewLayout}
+                                className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-black transition-all shadow-lg flex items-center gap-2 active:scale-95"
+                            >
+                                <Box size={20} /> NUEVA SALA
+                            </button>
+                        </header>
+
+                        <div className="bg-slate-800 rounded-3xl border border-slate-700 overflow-hidden shadow-2xl">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-900/50 border-b border-slate-700">
+                                        <th className="px-6 py-4 text-slate-400 font-bold uppercase text-xs tracking-widest w-16">ID</th>
+                                        <th className="px-6 py-4 text-slate-400 font-bold uppercase text-xs tracking-widest">Nombre de la Sala</th>
+                                        <th className="px-6 py-4 text-slate-400 font-bold uppercase text-xs tracking-widest">Elementos</th>
+                                        <th className="px-6 py-4 text-slate-400 font-bold uppercase text-xs tracking-widest text-right">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {layouts.map(l => (
+                                        <tr key={l.id} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors group">
+                                            <td className="px-6 py-5">
+                                                <span className="text-slate-500 font-mono text-sm">{l.id}</span>
+                                            </td>
+                                            <td className="px-6 py-5">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
+                                                        <Maximize size={18} />
+                                                    </div>
+                                                    <span className="text-white font-bold text-lg">{l.name}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-5">
+                                                <span className="bg-slate-900 text-slate-400 px-3 py-1 rounded-full text-xs font-bold border border-slate-700">
+                                                    {l.data?.length || 0} dispositivos
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-5 text-right flex justify-end gap-2 text-white">
+                                                <button onClick={() => openLayout(l)} className="p-2 hover:bg-blue-600/20 text-blue-400 rounded-lg transition-all" title="Editar"><Maximize size={20} /></button>
+                                                <button onClick={() => deleteLayout(l.id)} className="p-2 hover:bg-red-600/20 text-red-500 rounded-lg transition-all" title="Eliminar"><Trash2 size={20} /></button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                /* --- VISTA EDITOR DE CANVAS --- */
+                <div className="flex-1 relative">
+                    <div className="absolute top-4 left-6 z-10 flex items-center gap-4 bg-slate-800/40 backdrop-blur-md px-4 py-2 rounded-xl border border-slate-700/50">
+                        <h2 className="text-white font-black uppercase tracking-[0.2em] text-sm">{currentLayout.name}</h2>
+                    </div>
+
+                    <Stage
+                        width={window.innerWidth - 300}
+                        height={window.innerHeight - 200}
+                        onWheel={handleWheel}
+                        scaleX={scale}
+                        scaleY={scale}
+                        x={position.x}
+                        y={position.y}
+                        draggable
+                        onClick={(e) => { if (e.target === e.target.getStage()) setSelectedId(null); }}
+                    >
+                        <Layer>{gridLines}</Layer>
+                        <Layer>
+                            {objects.map((obj) => (
+                                <React.Fragment key={obj.id}>
+                                    {obj.type === 'tank' && <Tank {...obj} isSelected={obj.id === selectedId} onClick={() => setSelectedId(obj.id)} onDelete={() => deleteObject(obj.id)} onDblClick={() => updateObjectName(obj.id, obj.name)} onDragEnd={(e) => updateObjects(objects.map(o => o.id === obj.id ? { ...o, x: snapToGrid(e.target.x()), y: snapToGrid(e.target.y()) } : o))} />}
+                                    {obj.type === 'sensor' && <TempSensor {...obj} isSelected={obj.id === selectedId} onClick={() => setSelectedId(obj.id)} onDelete={() => deleteObject(obj.id)} onDblClick={() => updateObjectName(obj.id, obj.name)} onDragEnd={(e) => updateObjects(objects.map(o => o.id === obj.id ? { ...o, x: snapToGrid(e.target.x()), y: snapToGrid(e.target.y()) } : o))} />}
+                                    {obj.type === 'label' && <Label {...obj} isSelected={obj.id === selectedId} onClick={() => setSelectedId(obj.id)} onDelete={() => deleteObject(obj.id)} onDblClick={() => updateObjectName(obj.id, obj.text)} onDragEnd={(e) => updateObjects(objects.map(o => o.id === obj.id ? { ...o, x: snapToGrid(e.target.x()), y: snapToGrid(e.target.y()) } : o))} />}
+                                    {obj.type === 'line' && <SectorLine {...obj} isSelected={obj.id === selectedId} onClick={() => setSelectedId(obj.id)} onDelete={() => deleteObject(obj.id)} onUpdatePoints={(points) => updateObjects(objects.map(o => o.id === obj.id ? { ...o, points } : o))} />}
+                                </React.Fragment>
+                            ))}
+                        </Layer>
+                    </Stage>
+
+                    {/* Barra de Herramientas Editor */}
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-800/95 backdrop-blur-md h-16 rounded-2xl flex flex-row items-center gap-2 text-white shadow-2xl z-50 border border-slate-600 px-4">
+                        <button className="p-2.5 hover:bg-blue-600 rounded-xl transition-colors" title="Añadir Tanque" onClick={() => {
+                            const id = 't' + Date.now();
+                            const off = snapToGrid(getOffset());
+                            updateObjects([...objects, { id, type: 'tank', x: 200 + off, y: 200 + off, width: 60, height: 100, level: 50, name: 'Tanque' }]);
+                            showToast('Tanque añadido');
+                        }}><Box size={20} /></button>
+                        <button className="p-2.5 hover:bg-teal-600 rounded-xl transition-colors" title="Sensor" onClick={() => {
+                            const id = 's' + Date.now();
+                            const off = snapToGrid(getOffset());
+                            updateObjects([...objects, { id, type: 'sensor', x: 300 + off, y: 200 + off, value: 22.0, name: 'Sensor' }]);
+                            showToast('Sensor añadido');
+                        }}><Thermometer size={20} /></button>
+                        <button className="p-2.5 hover:bg-slate-600 rounded-xl transition-colors" title="Línea" onClick={() => {
+                            const id = 'l' + Date.now();
+                            const off = snapToGrid(getOffset());
+                            updateObjects([...objects, { id, type: 'line', points: [100 + off, 100 + off, 300 + off, 100 + off] }]);
+                            showToast('Línea añadida');
+                        }}><PenLine size={20} /></button>
+                        <button className="p-2.5 hover:bg-purple-600 rounded-xl transition-colors" title="Texto" onClick={() => {
+                            const id = 'tx' + Date.now();
+                            const off = snapToGrid(getOffset());
+                            updateObjects([...objects, { id, type: 'label', x: 400 + off, y: 200 + off, text: 'Etiqueta' }]);
+                            showToast('Etiqueta añadida');
+                        }}><Type size={20} /></button>
+
+                        <div className="w-px h-6 bg-slate-700 mx-1"></div>
+
+                        <button className={`p-2.5 rounded-xl transition-colors ${showGrid ? 'bg-blue-600' : 'hover:bg-slate-600'}`} title="Grilla" onClick={() => setShowGrid(!showGrid)}><Grid3X3 size={20} /></button>
+                        <button className="p-2.5 hover:bg-slate-600 rounded-xl disabled:opacity-20 translate-y-px" disabled={historyStep === 0} onClick={undo}><RotateCcw size={20} /></button>
+                        <button className="p-2.5 hover:bg-slate-600 rounded-xl disabled:opacity-20 translate-y-px" disabled={historyStep === history.length - 1} onClick={redo}><RotateCw size={20} /></button>
+
+                        <div className="w-px h-6 bg-slate-700 mx-1"></div>
+
+                        <button className="h-10 bg-blue-600 hover:bg-blue-500 rounded-xl text-white shadow-lg flex items-center gap-2 px-6 transition-all active:scale-95 font-bold" onClick={saveLayout}><Save size={18} /> GUARDAR</button>
+                        <button onClick={() => { setCurrentLayout(null); fetchLayouts(); }} className="bg-slate-700/50 hover:bg-slate-700 text-slate-300 h-10 px-4 rounded-xl border border-slate-600 transition-all font-bold flex items-center gap-2 pr-4"><RotateCcw size={16} className="-scale-x-100" /> SALAS</button>
+                    </div>
+                </div>
+            )}
+
+            {/* --- COMPONENTES GLOBALES (SIEMPRE VISIBLES) --- */}
+
+            {/* Modal dinámico */}
             {modal.open && (
-                <div className="absolute inset-0 flex items-center justify-center z-[100] bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-slate-800 p-6 rounded-2xl shadow-2xl border border-slate-600 w-80">
-                        <h3 className="text-white font-bold mb-4 flex items-center gap-2">
-                            <PenLine size={18} className="text-blue-400" /> {modal.title}
+                <div className="fixed inset-0 flex items-center justify-center z-[500] bg-slate-950/80 backdrop-blur-md px-4">
+                    <div className="bg-slate-800 p-8 rounded-3xl shadow-2xl border border-slate-700 w-full max-w-sm animate-in zoom-in-95 duration-200">
+                        <h3 className={`text-2xl font-black mb-4 flex items-center gap-3 ${modal.isConfirm ? 'text-red-400' : 'text-white'}`}>
+                            {modal.isConfirm ? <Trash2 size={24} /> : <PenLine size={24} className="text-blue-400" />}
+                            {modal.title}
                         </h3>
-                        <input
-                            autoFocus
-                            className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white mb-6 outline-none focus:border-blue-500"
-                            value={modal.value}
-                            onChange={(e) => setModal({ ...modal, value: e.target.value })}
-                            onKeyDown={(e) => { if (e.key === 'Enter') { modal.onConfirm(modal.value); setModal({ ...modal, open: false }); } }}
-                        />
-                        <div className="flex justify-end gap-2">
-                            <button className="px-4 py-2 text-slate-400 hover:text-white transition-colors" onClick={() => setModal({ ...modal, open: false })}>Cancelar</button>
-                            <button className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold transition-all shadow-lg active:scale-95" onClick={() => { modal.onConfirm(modal.value); setModal({ ...modal, open: false }); }}>Aceptar</button>
+                        {modal.isConfirm ? (
+                            <p className="text-slate-400 mb-8 font-medium">{modal.value}</p>
+                        ) : (
+                            <input
+                                autoFocus
+                                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-4 text-white mb-8 outline-none focus:ring-2 focus:ring-blue-500 text-lg font-bold"
+                                value={modal.value}
+                                onChange={(e) => setModal({ ...modal, value: e.target.value })}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { modal.onConfirm(modal.value); setModal({ ...modal, open: false }); } }}
+                            />
+                        )}
+                        <div className="flex justify-end gap-3">
+                            <button className="px-5 py-3 text-slate-400 font-bold hover:text-white" onClick={() => setModal({ ...modal, open: false })}>CANCELAR</button>
+                            <button className={`px-8 py-3 rounded-xl font-black shadow-lg transition-all active:scale-95 ${modal.isConfirm ? 'bg-red-600 hover:bg-red-500' : 'bg-blue-600 hover:bg-blue-500'} text-white`} onClick={() => { modal.onConfirm(modal.value); setModal({ ...modal, open: false }); }}>{modal.isConfirm ? 'ELIMINAR' : 'ACEPTAR'}</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Sistema de Toasts */}
+            {/* Toast Estilo Alert (Centro Superior) */}
             {toast && (
-                <div className={`absolute top-6 right-6 px-6 py-3 rounded-xl shadow-2xl border flex items-center gap-3 z-[100] animate-in slide-in-from-right-10 duration-300
-                    ${toast.type === 'error' ? 'bg-red-900/90 border-red-500 text-red-100' : 'bg-slate-800/90 border-blue-500 text-blue-100'}`}>
-                    {toast.type === 'error' ? <Trash2 size={18} /> : <Save size={18} />}
-                    <span className="font-medium">{toast.message}</span>
+                <div className="fixed top-8 left-1/2 -translate-x-1/2 z-[1000] animate-in slide-in-from-top-full duration-500 max-w-md w-full px-4">
+                    <div className={`px-8 py-4 rounded-2xl shadow-[0_30px_60px_rgba(0,0,0,0.6)] border-2 flex items-center justify-center gap-4 backdrop-blur-2xl
+                        ${toast.type === 'error' ? 'bg-red-950/90 border-red-500 text-red-100' : 'bg-slate-800/90 border-blue-500 text-blue-100'}`}>
+                        <div className={`w-3 h-3 rounded-full animate-ping shrink-0 ${toast.type === 'error' ? 'bg-red-400' : 'bg-blue-400'}`} />
+                        <span className="font-black text-lg tracking-wide uppercase text-center">{toast.message}</span>
+                    </div>
                 </div>
             )}
-
-            <Stage
-                width={window.innerWidth - 300}
-                height={window.innerHeight - 100}
-                onWheel={handleWheel}
-                scaleX={scale}
-                scaleY={scale}
-                x={position.x}
-                y={position.y}
-                draggable
-                onClick={(e) => { if (e.target === e.target.getStage()) setSelectedId(null); }}
-            >
-                <Layer>
-                    {gridLines}
-                </Layer>
-                <Layer>
-                    {objects.map((obj) => {
-                        const commonProps = {
-                            key: obj.id,
-                            isSelected: obj.id === selectedId,
-                            onClick: () => setSelectedId(obj.id),
-                            onDelete: () => deleteObject(obj.id),
-                            onDblClick: () => updateObjectName(obj.id, obj.name || obj.text),
-                            onDragEnd: (e) => {
-                                updateObjects(objects.map(o => o.id === obj.id ? { ...o, x: snapToGrid(e.target.x()), y: snapToGrid(e.target.y()) } : o));
-                            }
-                        };
-
-                        if (obj.type === 'tank') return <Tank {...obj} {...commonProps} />;
-                        if (obj.type === 'sensor') return <TempSensor {...obj} {...commonProps} />;
-                        if (obj.type === 'label') return <Label {...obj} {...commonProps} />;
-                        if (obj.type === 'line') return (
-                            <SectorLine {...obj} {...commonProps} onUpdatePoints={(newPoints) => {
-                                updateObjects(objects.map(o => o.id === obj.id ? { ...o, points: newPoints } : o));
-                            }} />
-                        );
-                        return null;
-                    })}
-                </Layer>
-            </Stage>
-
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-slate-800/95 backdrop-blur-md h-16 rounded-2xl flex flex-row items-center gap-2 text-white shadow-2xl z-50 border border-slate-600 px-4">
-                {/* Botones de Añadir */}
-                <button className="p-2.5 hover:bg-blue-600 rounded-xl transition-colors" title="Añadir Tanque" onClick={() => {
-                    const id = 't' + Date.now();
-                    const off = snapToGrid(getOffset());
-                    updateObjects([...objects, { id, type: 'tank', x: 200 + off, y: 200 + off, width: 60, height: 100, level: 50, name: 'Tanque' }]);
-                    showToast('Tanque añadido');
-                }}><Box size={20} /></button>
-
-                <button className="p-2.5 hover:bg-teal-600 rounded-xl transition-colors" title="Añadir Sensor Temp" onClick={() => {
-                    const id = 's' + Date.now();
-                    const off = snapToGrid(getOffset());
-                    updateObjects([...objects, { id, type: 'sensor', x: 300 + off, y: 200 + off, value: 22.0, name: 'Sensor' }]);
-                    showToast('Sensor añadido');
-                }}><Thermometer size={20} /></button>
-
-                <button className="p-2.5 hover:bg-slate-600 rounded-xl transition-colors" title="Dibujar Línea" onClick={() => {
-                    const id = 'l' + Date.now();
-                    const off = snapToGrid(getOffset());
-                    updateObjects([...objects, { id, type: 'line', points: [100 + off, 100 + off, 300 + off, 100 + off] }]);
-                    showToast('Línea añadida');
-                }}><PenLine size={20} /></button>
-
-                <button className="p-2.5 hover:bg-purple-600 rounded-xl transition-colors" title="Añadir Etiqueta" onClick={() => {
-                    const id = 'tx' + Date.now();
-                    const off = snapToGrid(getOffset());
-                    updateObjects([...objects, { id, type: 'label', x: 400 + off, y: 200 + off, text: 'Etiqueta' }]);
-                    showToast('Etiqueta añadida');
-                }}><Type size={20} /></button>
-
-                <button className={`p-2.5 rounded-xl transition-colors ${showGrid ? 'bg-blue-600' : 'hover:bg-slate-600'}`} title="Mostrar Grilla" onClick={() => setShowGrid(!showGrid)}>
-                    <Grid3X3 size={20} />
-                </button>
-
-                <button className="p-2.5 hover:bg-slate-600 rounded-xl disabled:opacity-20 transition-opacity" disabled={historyStep === 0} title="Deshacer" onClick={undo}>
-                    <RotateCcw size={20} />
-                </button>
-                <button className="p-2.5 hover:bg-slate-600 rounded-xl disabled:opacity-20 transition-opacity" disabled={historyStep === history.length - 1} title="Rehacer" onClick={redo}>
-                    <RotateCw size={20} />
-                </button>
-
-                <button className="h-10 bg-blue-600 hover:bg-blue-500 rounded-xl text-white shadow-lg flex items-center gap-2 px-4 transition-all active:scale-95 ml-1" title="Guardar Cambios" onClick={saveLayout}>
-                    <Save size={18} />
-                    <span className="text-xs font-bold uppercase tracking-widest whitespace-nowrap">Guardar</span>
-                </button>
-
-                <div className="w-px h-6 bg-slate-700 mx-2"></div>
-
-            </div>
         </div>
     );
 };

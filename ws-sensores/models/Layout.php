@@ -24,7 +24,7 @@ class Layout extends ActiveRecord
     public function rules()
     {
         return [
-            [['tenant_id', 'name', 'data'], 'required'],
+            [['tenant_id', 'name'], 'required'],
             [['tenant_id'], 'integer'],
             [['data', 'created_at', 'updated_at'], 'safe'],
             [['name'], 'string', 'max' => 255],
