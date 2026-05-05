@@ -81,7 +81,7 @@ const SectorLine = ({ id, points, isSelected, onClick, onDragEnd, onDelete, onUp
                 dash={isSelected ? [10, 5] : []}
                 onClick={onClick}
                 draggable
-                onDragMove={(e) => {
+                onDragEnd={(e) => {
                     const dx = e.target.x();
                     const dy = e.target.y();
                     const newPoints = [points[0] + dx, points[1] + dy, points[2] + dx, points[3] + dy];
@@ -178,6 +178,8 @@ const IoTCanvas = () => {
 
     if (loading) return <div className="p-10 text-white">Cargando canvas...</div>;
 
+    const getOffset = () => (objects.length % 10) * 15;
+
     return (
         <div className="w-full h-full bg-slate-900 overflow-hidden relative border border-slate-700 rounded-lg shadow-2xl">
             <Stage
@@ -220,19 +222,23 @@ const IoTCanvas = () => {
             <div className="absolute top-4 left-4 bg-slate-800 p-2 rounded flex flex-col gap-2 text-white shadow-lg z-50 border border-slate-600">
                 <button className="p-2 hover:bg-blue-600 rounded" title="Añadir Tanque" onClick={() => {
                     const id = 't' + Date.now();
-                    setObjects([...objects, { id, type: 'tank', x: 200, y: 200, width: 60, height: 100, level: 50, name: 'Tanque' }]);
+                    const off = getOffset();
+                    setObjects([...objects, { id, type: 'tank', x: 200 + off, y: 200 + off, width: 60, height: 100, level: 50, name: 'Tanque' }]);
                 }}><Box size={24} /></button>
                 <button className="p-2 hover:bg-teal-600 rounded" title="Añadir Sensor Temp" onClick={() => {
                     const id = 's' + Date.now();
-                    setObjects([...objects, { id, type: 'sensor', x: 300, y: 200, value: 22.0, name: 'Sensor' }]);
+                    const off = getOffset();
+                    setObjects([...objects, { id, type: 'sensor', x: 300 + off, y: 200 + off, value: 22.0, name: 'Sensor' }]);
                 }}><Thermometer size={24} /></button>
                 <button className="p-2 hover:bg-slate-600 rounded" title="Dibujar Línea" onClick={() => {
                     const id = 'l' + Date.now();
-                    setObjects([...objects, { id, type: 'line', points: [100, 100, 300, 100] }]);
+                    const off = getOffset();
+                    setObjects([...objects, { id, type: 'line', points: [100 + off, 100 + off, 300 + off, 100 + off] }]);
                 }}><PenLine size={24} /></button>
                 <button className="p-2 hover:bg-purple-600 rounded" title="Añadir Etiqueta" onClick={() => {
                     const id = 'tx' + Date.now();
-                    setObjects([...objects, { id, type: 'label', x: 400, y: 200, text: 'Nueva Etiqueta' }]);
+                    const off = getOffset();
+                    setObjects([...objects, { id, type: 'label', x: 400 + off, y: 200 + off, text: 'Nueva Etiqueta' }]);
                 }}><Type size={24} /></button>
 
                 <div className="w-full h-px bg-slate-700 my-1"></div>
