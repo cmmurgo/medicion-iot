@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Stage, Layer, Rect, Text, Group, Circle, Line } from 'react-konva';
-import { Box, Move, Maximize, MousePointer2 } from 'lucide-react';
+import { Box, Move, Maximize, MousePointer2, Save } from 'lucide-react';
+
+const API_URL = 'http://localhost:5000/api';
+const DEFAULT_TENANT_ID = 1;
 
 const Tank = ({ x, y, width, height, level, name, onDragEnd, onTransformEnd }) => {
     return (
@@ -53,12 +56,59 @@ const Tank = ({ x, y, width, height, level, name, onDragEnd, onTransformEnd }) =
 };
 
 const IoTCanvas = () => {
-    const [objects, setObjects] = useState([
-        { id: '1', type: 'tank', x: 100, y: 100, width: 80, height: 120, level: 65, name: 'Tanque 1' },
-        { id: '2', type: 'tank', x: 300, y: 150, width: 80, height: 120, level: 30, name: 'Tanque 2' }
-    ]);
+    const [objects, setObjects] = useState([]);
     const [scale, setScale] = useState(1);
     const [position, setPosition] = useState({ x: 0, y: 0 });
+    const [loading, setLoading] = useState(true);
+
+    // Initial Fetch
+    useEffect(() => {
+        fetch(`${API_URL}/tenants/${DEFAULT_TENANT_ID}/layouts`)
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.length > 0) {
+                    // We take the latest layout for now
+                    const latestLayout = data[data.length - 1];
+                    setObjects(latestLayout.data);
+                } else {
+                    // Default objects if no layout found
+                    setObjects([
+                        { id: '1', type: 'tank', x: 100, y: 100, width: 80, height: 120, level: 65, name: 'Tanque 1' },
+                        { id: '2', type: 'tank', x: 300, y: 150, width: 80, height: 120, level: 30, name: 'Tanque 2' }
+                    ]);
+                }
+                setLoading(false);
+            })
+            .catch(err => {
+                console.error("Error loading layout:", err);
+                setLoading(false);
+            });
+    }, []);
+
+    const saveLayout = async () => {
+        try {
+            const response = await fetch(`${API_URL}/layouts`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    tenant_id: DEFAULT_TENANT_ID,
+                    name: 'Principal Layout',
+                    data: objects
+                }),
+            });
+            const result = await response.json();
+            if (response.ok) {
+                alert('Layout guardado exitosamente');
+            } else {
+                alert('Error al guardar: ' + JSON.stringify(result));
+            }
+        } catch (err) {
+            console.error("Error saving layout:", err);
+            alert('Error al conectar con el servidor');
+        }
+    };
 
     const handleWheel = (e) => {
         e.evt.preventDefault();
@@ -80,6 +130,8 @@ const IoTCanvas = () => {
         });
     };
 
+    if (loading) return <div className="p-10 text-white">Cargando canvas...</div>;
+
     return (
         <div className="w-full h-full bg-slate-900 overflow-hidden relative border border-slate-700 rounded-lg shadow-2xl">
             <Stage
@@ -93,7 +145,6 @@ const IoTCanvas = () => {
                 draggable
             >
                 <Layer>
-                    {/* Grid lines can be added here */}
                     {objects.map((obj) => {
                         if (obj.type === 'tank') {
                             return (
@@ -124,6 +175,14 @@ const IoTCanvas = () => {
                 </button>
                 <button className="p-2 hover:bg-blue-600 rounded" title="Puntero">
                     <MousePointer2 size={24} />
+                </button>
+                <div className="w-full h-px bg-slate-700 my-1"></div>
+                <button
+                    className="p-2 bg-blue-600 hover:bg-blue-500 rounded text-white"
+                    title="Guardar Cambios"
+                    onClick={saveLayout}
+                >
+                    <Save size={24} />
                 </button>
             </div>
         </div>

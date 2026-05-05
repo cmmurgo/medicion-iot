@@ -1,7 +1,12 @@
 {
-    "name": "yiisoft/yii2-app-basic",
+    "name": "app/ws-sensores",
     "description": "Yii 2 Basic Project Template",
-    "keywords": ["yii2", "framework", "basic", "project template"],
+    "keywords": [
+        "yii2",
+        "framework",
+        "basic",
+        "project template"
+    ],
     "homepage": "https://www.yiiframework.com/",
     "type": "project",
     "license": "BSD-3-Clause",
@@ -32,7 +37,7 @@
     },
     "config": {
         "allow-plugins": {
-            "yiisoft/yii2-composer" : true
+            "yiisoft/yii2-composer": true
         },
         "process-timeout": 1800,
         "fxp-asset": {
