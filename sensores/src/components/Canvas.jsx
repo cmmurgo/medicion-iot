@@ -2,25 +2,26 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Stage, Layer, Rect, Text, Group, Circle, Line } from 'react-konva';
 import { Box, Move, Maximize, MousePointer2, Save } from 'lucide-react';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = 'http://localhost/medicion-iot/ws-sensores/web/api';
 const DEFAULT_TENANT_ID = 1;
 
-const Tank = ({ x, y, width, height, level, name, onDragEnd, onTransformEnd }) => {
+const Tank = ({ id, x, y, width, height, level, name, isSelected, onClick, onDragEnd, onDblClick, onDelete }) => {
     return (
         <Group
             x={x}
             y={y}
             draggable
             onDragEnd={onDragEnd}
-            onTransformEnd={onTransformEnd}
+            onClick={onClick}
+            onDblClick={onDblClick}
         >
             {/* Tank Body */}
             <Rect
                 width={width}
                 height={height}
                 fill="#2c3e50"
-                stroke="#ecf0f1"
-                strokeWidth={2}
+                stroke={isSelected ? "#3498db" : "#ecf0f1"}
+                strokeWidth={isSelected ? 4 : 2}
                 cornerRadius={5}
             />
             {/* Liquid Level */}
@@ -36,27 +37,45 @@ const Tank = ({ x, y, width, height, level, name, onDragEnd, onTransformEnd }) =
             <Text
                 text={name}
                 fontSize={14}
-                fill="#ecf0f1"
+                fill={isSelected ? "#3498db" : "#ecf0f1"}
+                fontStyle='bold'
                 y={-20}
                 width={width}
                 align="center"
             />
-            {/* Percentage */}
-            <Text
-                text={`${level}%`}
-                fontSize={12}
-                fill="#ffffff"
-                x={0}
-                y={height / 2 - 6}
-                width={width}
-                align="center"
-            />
+
+            {/* Delete button (only if selected) */}
+            {isSelected && (
+                <Group
+                    x={width - 10}
+                    y={-10}
+                    onClick={(e) => {
+                        e.cancelBubble = true; // Empieza y termina aquí para que no deseleccione al borrar
+                        onDelete();
+                    }}
+                >
+                    <Circle
+                        radius={10}
+                        fill="#e74c3c"
+                    />
+                    <Text
+                        text="×"
+                        fontSize={16}
+                        fill="white"
+                        x={-5}
+                        y={-9}
+                        width={10}
+                        align="center"
+                    />
+                </Group>
+            )}
         </Group>
     );
 };
 
 const IoTCanvas = () => {
     const [objects, setObjects] = useState([]);
+    const [selectedId, setSelectedId] = useState(null);
     const [scale, setScale] = useState(1);
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const [loading, setLoading] = useState(true);
@@ -67,11 +86,9 @@ const IoTCanvas = () => {
             .then(res => res.json())
             .then(data => {
                 if (data && data.length > 0) {
-                    // We take the latest layout for now
                     const latestLayout = data[data.length - 1];
                     setObjects(latestLayout.data);
                 } else {
-                    // Default objects if no layout found
                     setObjects([
                         { id: '1', type: 'tank', x: 100, y: 100, width: 80, height: 120, level: 65, name: 'Tanque 1' },
                         { id: '2', type: 'tank', x: 300, y: 150, width: 80, height: 120, level: 30, name: 'Tanque 2' }
@@ -98,10 +115,10 @@ const IoTCanvas = () => {
                     data: objects
                 }),
             });
-            const result = await response.json();
             if (response.ok) {
-                alert('Layout guardado exitosamente');
+                alert('Diseño guardado en la base de datos');
             } else {
+                const result = await response.json();
                 alert('Error al guardar: ' + JSON.stringify(result));
             }
         } catch (err) {
@@ -135,7 +152,7 @@ const IoTCanvas = () => {
     return (
         <div className="w-full h-full bg-slate-900 overflow-hidden relative border border-slate-700 rounded-lg shadow-2xl">
             <Stage
-                width={window.innerWidth - 300} // Sidebar offset
+                width={window.innerWidth - 300}
                 height={window.innerHeight - 100}
                 onWheel={handleWheel}
                 scaleX={scale}
@@ -143,6 +160,12 @@ const IoTCanvas = () => {
                 x={position.x}
                 y={position.y}
                 draggable
+                onClick={(e) => {
+                    // Deselect if clicking on empty space
+                    if (e.target === e.target.getStage()) {
+                        setSelectedId(null);
+                    }
+                }}
             >
                 <Layer>
                     {objects.map((obj) => {
@@ -151,6 +174,18 @@ const IoTCanvas = () => {
                                 <Tank
                                     key={obj.id}
                                     {...obj}
+                                    isSelected={obj.id === selectedId}
+                                    onClick={() => setSelectedId(obj.id)}
+                                    onDblClick={() => {
+                                        const newName = prompt('Nuevo nombre del tanque:', obj.name);
+                                        if (newName !== null) {
+                                            setObjects(objects.map(o => o.id === obj.id ? { ...o, name: newName } : o));
+                                        }
+                                    }}
+                                    onDelete={() => {
+                                        setObjects(objects.filter(o => o.id !== obj.id));
+                                        setSelectedId(null);
+                                    }}
                                     onDragEnd={(e) => {
                                         const newObjs = objects.map(o =>
                                             o.id === obj.id ? { ...o, x: e.target.x(), y: e.target.y() } : o
@@ -166,11 +201,17 @@ const IoTCanvas = () => {
             </Stage>
 
             {/* Controls */}
-            <div className="absolute top-4 left-4 bg-slate-800 p-2 rounded flex flex-col gap-2 text-white shadow-lg">
-                <button className="p-2 hover:bg-blue-600 rounded" title="Añadir Tanque" onClick={() => {
-                    const id = Math.random().toString(36).substr(2, 9);
-                    setObjects([...objects, { id, type: 'tank', x: 50, y: 50, width: 60, height: 100, level: 50, name: 'Nuevo Tanque' }]);
-                }}>
+            <div className="absolute top-4 left-4 bg-slate-800 p-2 rounded flex flex-col gap-2 text-white shadow-lg z-50">
+                <button
+                    className="p-2 hover:bg-blue-600 rounded"
+                    title="Añadir Tanque"
+                    onClick={() => {
+                        const id = Math.random().toString(36).substr(2, 9);
+                        const newX = 50 + (objects.length * 20);
+                        const newY = 50 + (objects.length * 20);
+                        setObjects([...objects, { id, type: 'tank', x: newX, y: newY, width: 60, height: 100, level: 50, name: 'Nuevo Tanque' }]);
+                    }}
+                >
                     <Box size={24} />
                 </button>
                 <button className="p-2 hover:bg-blue-600 rounded" title="Puntero">
