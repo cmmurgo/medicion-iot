@@ -1,9 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Stage, Layer, Rect, Text, Group, Circle, Line } from 'react-konva';
-import { Box, Move, Maximize, MousePointer2, Save, Thermometer, PenLine, Trash2, Type } from 'lucide-react';
+import { Box, Move, Maximize, MousePointer2, Save, Thermometer, PenLine, Trash2, Type, Grid3X3 } from 'lucide-react';
 
 const API_URL = 'http://localhost/medicion-iot/ws-sensores/web/api';
 const DEFAULT_TENANT_ID = 1;
+const GRID_SIZE = 20;
+
+const snapToGrid = (value) => Math.round(value / GRID_SIZE) * GRID_SIZE;
 
 const Tank = ({ id, x, y, width, height, level, name, isSelected, onClick, onDragEnd, onDblClick, onDelete }) => {
     return (
@@ -82,9 +85,14 @@ const SectorLine = ({ id, points, isSelected, onClick, onDragEnd, onDelete, onUp
                 onClick={onClick}
                 draggable
                 onDragEnd={(e) => {
-                    const dx = e.target.x();
-                    const dy = e.target.y();
-                    const newPoints = [points[0] + dx, points[1] + dy, points[2] + dx, points[3] + dy];
+                    const dx = snapToGrid(e.target.x());
+                    const dy = snapToGrid(e.target.y());
+                    const newPoints = [
+                        snapToGrid(points[0] + dx),
+                        snapToGrid(points[1] + dy),
+                        snapToGrid(points[2] + dx),
+                        snapToGrid(points[3] + dy)
+                    ];
                     e.target.position({ x: 0, y: 0 });
                     onUpdatePoints(newPoints);
                 }}
@@ -93,15 +101,15 @@ const SectorLine = ({ id, points, isSelected, onClick, onDragEnd, onDelete, onUp
                 <>
                     <Circle
                         x={points[0]} y={points[1]} radius={8} fill="#3498db" draggable
-                        onDragMove={(e) => {
-                            const newPoints = [e.target.x(), e.target.y(), points[2], points[3]];
+                        onDragEnd={(e) => {
+                            const newPoints = [snapToGrid(e.target.x()), snapToGrid(e.target.y()), points[2], points[3]];
                             onUpdatePoints(newPoints);
                         }}
                     />
                     <Circle
                         x={points[2]} y={points[3]} radius={8} fill="#3498db" draggable
-                        onDragMove={(e) => {
-                            const newPoints = [points[0], points[1], e.target.x(), e.target.y()];
+                        onDragEnd={(e) => {
+                            const newPoints = [points[0], points[1], snapToGrid(e.target.x()), snapToGrid(e.target.y())];
                             onUpdatePoints(newPoints);
                         }}
                     />
@@ -125,6 +133,7 @@ const IoTCanvas = () => {
     const [scale, setScale] = useState(1);
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const [loading, setLoading] = useState(true);
+    const [showGrid, setShowGrid] = useState(true);
 
     useEffect(() => {
         fetch(`${API_URL}/tenants/${DEFAULT_TENANT_ID}/layouts`)
@@ -180,6 +189,18 @@ const IoTCanvas = () => {
 
     const getOffset = () => (objects.length % 10) * 15;
 
+    const gridLines = [];
+    if (showGrid) {
+        const width = 2000;
+        const height = 2000;
+        for (let i = 0; i <= width / GRID_SIZE; i++) {
+            gridLines.push(<Line key={`v${i}`} points={[i * GRID_SIZE, 0, i * GRID_SIZE, height]} stroke="#2c3e50" strokeWidth={1} />);
+        }
+        for (let j = 0; j <= height / GRID_SIZE; j++) {
+            gridLines.push(<Line key={`h${j}`} points={[0, j * GRID_SIZE, width, j * GRID_SIZE]} stroke="#2c3e50" strokeWidth={1} />);
+        }
+    }
+
     return (
         <div className="w-full h-full bg-slate-900 overflow-hidden relative border border-slate-700 rounded-lg shadow-2xl">
             <Stage
@@ -194,6 +215,9 @@ const IoTCanvas = () => {
                 onClick={(e) => { if (e.target === e.target.getStage()) setSelectedId(null); }}
             >
                 <Layer>
+                    {gridLines}
+                </Layer>
+                <Layer>
                     {objects.map((obj) => {
                         const commonProps = {
                             key: obj.id,
@@ -202,7 +226,7 @@ const IoTCanvas = () => {
                             onDelete: () => deleteObject(obj.id),
                             onDblClick: () => updateObjectName(obj.id, obj.name || obj.text),
                             onDragEnd: (e) => {
-                                setObjects(objects.map(o => o.id === obj.id ? { ...o, x: e.target.x(), y: e.target.y() } : o));
+                                setObjects(objects.map(o => o.id === obj.id ? { ...o, x: snapToGrid(e.target.x()), y: snapToGrid(e.target.y()) } : o));
                             }
                         };
 
@@ -222,26 +246,30 @@ const IoTCanvas = () => {
             <div className="absolute top-4 left-4 bg-slate-800 p-2 rounded flex flex-col gap-2 text-white shadow-lg z-50 border border-slate-600">
                 <button className="p-2 hover:bg-blue-600 rounded" title="Añadir Tanque" onClick={() => {
                     const id = 't' + Date.now();
-                    const off = getOffset();
+                    const off = snapToGrid(getOffset());
                     setObjects([...objects, { id, type: 'tank', x: 200 + off, y: 200 + off, width: 60, height: 100, level: 50, name: 'Tanque' }]);
                 }}><Box size={24} /></button>
                 <button className="p-2 hover:bg-teal-600 rounded" title="Añadir Sensor Temp" onClick={() => {
                     const id = 's' + Date.now();
-                    const off = getOffset();
+                    const off = snapToGrid(getOffset());
                     setObjects([...objects, { id, type: 'sensor', x: 300 + off, y: 200 + off, value: 22.0, name: 'Sensor' }]);
                 }}><Thermometer size={24} /></button>
                 <button className="p-2 hover:bg-slate-600 rounded" title="Dibujar Línea" onClick={() => {
                     const id = 'l' + Date.now();
-                    const off = getOffset();
+                    const off = snapToGrid(getOffset());
                     setObjects([...objects, { id, type: 'line', points: [100 + off, 100 + off, 300 + off, 100 + off] }]);
                 }}><PenLine size={24} /></button>
                 <button className="p-2 hover:bg-purple-600 rounded" title="Añadir Etiqueta" onClick={() => {
                     const id = 'tx' + Date.now();
-                    const off = getOffset();
-                    setObjects([...objects, { id, type: 'label', x: 400 + off, y: 200 + off, text: 'Nueva Etiqueta' }]);
+                    const off = snapToGrid(getOffset());
+                    setObjects([...objects, { id, type: 'label', x: 400 + off, y: 200 + off, text: 'Etiqueta' }]);
                 }}><Type size={24} /></button>
 
                 <div className="w-full h-px bg-slate-700 my-1"></div>
+                <button className={`p-2 rounded ${showGrid ? 'bg-blue-900' : 'hover:bg-slate-600'}`} title="Mostrar Grilla" onClick={() => setShowGrid(!showGrid)}>
+                    <Grid3X3 size={24} />
+                </button>
+
                 <button className="p-2 bg-blue-600 hover:bg-blue-500 rounded text-white" title="Guardar Cambios" onClick={saveLayout}><Save size={24} /></button>
             </div>
         </div>
