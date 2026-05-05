@@ -170,8 +170,27 @@ const IoTCanvas = () => {
 
     const openLayout = (layout) => {
         setCurrentLayout(layout);
-        setObjects(layout.data || []);
-        setHistory([layout.data || []]);
+        const savedData = layout.data;
+
+        if (Array.isArray(savedData)) {
+            // Caso antiguo: solo objetos
+            setObjects(savedData);
+            setScale(1);
+            setPosition({ x: 0, y: 0 });
+            setHistory([savedData]);
+        } else if (savedData && savedData.objects) {
+            // Caso nuevo: objetos + viewport
+            setObjects(savedData.objects);
+            setScale(savedData.viewport?.scale || 1);
+            setPosition(savedData.viewport?.position || { x: 0, y: 0 });
+            setHistory([savedData.objects]);
+        } else {
+            setObjects([]);
+            setScale(1);
+            setPosition({ x: 0, y: 0 });
+            setHistory([[]]);
+        }
+
         setHistoryStep(0);
         setSelectedId(null);
     };
@@ -213,20 +232,22 @@ const IoTCanvas = () => {
         });
     };
 
+    // GUARDAR CAMBIOS
     const saveLayout = async () => {
         if (!currentLayout) return;
+        const layoutData = {
+            objects: objects,
+            viewport: { scale, position }
+        };
         try {
-            const response = await fetch(`${API_URL}/layouts/${currentLayout.id}`, {
+            const res = await fetch(`${API_URL}/layouts/${currentLayout.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...currentLayout, data: objects }),
+                body: JSON.stringify({ ...currentLayout, data: layoutData })
             });
-            if (response.ok) {
-                showToast('Cambios guardados');
-                // Actualizar la lista localmente sin recargar todo
-                setLayouts(layouts.map(l => l.id === currentLayout.id ? { ...l, data: objects } : l));
-            }
-        } catch (err) { showToast('Error al conectar con el servidor', 'error'); }
+            if (res.ok) showToast('Progreso guardado');
+            else showToast('Error al guardar', 'error');
+        } catch (err) { showToast('Error de conexión', 'error'); }
     };
 
     const updateObjects = (newObjects) => {
