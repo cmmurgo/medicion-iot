@@ -317,63 +317,79 @@ const IoTCanvas = () => {
     if (loading) return <div className="p-20 text-blue-400 font-bold text-2xl flex flex-col items-center gap-4 animate-pulse"><Maximize size={48} className="animate-spin" /> Cargando Sistema...</div>;
 
     return (
-        <div className="w-full h-screen bg-slate-900 overflow-hidden relative border border-slate-700 rounded-lg shadow-2xl flex flex-col">
+        <div className="w-full h-screen bg-slate-50 overflow-hidden relative border border-slate-200 rounded-lg shadow-2xl flex flex-col">
 
             {/* VISTA CONDICIONAL: LOBBY O EDITOR */}
             {!currentLayout ? (
                 /* --- VISTA LISTADO DE SALAS --- */
-                <div className="w-full h-full p-10 overflow-y-auto">
-                    <div className="max-w-5xl mx-auto">
-                        <header className="flex justify-between items-center mb-8 bg-slate-800/40 p-6 rounded-2xl border border-slate-800">
+                <div className="w-full flex-1 p-10 overflow-y-auto bg-slate-50">
+                    <div className="max-w-6xl mx-auto">
+                        <header className="mb-10 flex justify-between items-end border-b border-slate-300 pb-8">
                             <div>
-                                <h1 className="text-3xl font-black text-white tracking-tighter uppercase leading-none mb-1">Panel de Control</h1>
-                                <p className="text-slate-500 font-medium tracking-wide">Gestión de Salas y Planos IoT</p>
+                                <h1 className="text-4xl font-black text-slate-900 tracking-tighter uppercase leading-none mb-2">Panel de Control</h1>
+                                <p className="text-slate-600 font-bold tracking-wide uppercase text-xs">Gestión de Salas y Planos</p>
                             </div>
                             <button
                                 onClick={createNewLayout}
-                                className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-black transition-all shadow-lg flex items-center gap-2 active:scale-95"
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-black transition-all shadow-xl flex items-center gap-2 active:scale-95"
                             >
-                                <Box size={20} /> NUEVA SALA
+                                <Box size={22} /> NUEVA SALA
                             </button>
                         </header>
 
-                        <div className="bg-slate-800 rounded-3xl border border-slate-700 overflow-hidden shadow-2xl">
-                            <table className="w-full text-left border-collapse">
+                        <div className="bg-white rounded-3xl border border-slate-300 overflow-hidden shadow-xl">
+                            <table className="w-full text-left border-separate border-spacing-0">
                                 <thead>
-                                    <tr className="bg-slate-900/50 border-b border-slate-700">
-                                        <th className="px-6 py-4 text-slate-400 font-bold uppercase text-xs tracking-widest w-16">ID</th>
-                                        <th className="px-6 py-4 text-slate-400 font-bold uppercase text-xs tracking-widest">Nombre de la Sala</th>
-                                        <th className="px-6 py-4 text-slate-400 font-bold uppercase text-xs tracking-widest">Elementos</th>
-                                        <th className="px-6 py-4 text-slate-400 font-bold uppercase text-xs tracking-widest text-right">Acciones</th>
+                                    <tr className="bg-slate-200">
+                                        <th className="px-6 py-5 text-slate-700 font-black uppercase text-[10px] tracking-[0.2em] border-b border-r border-slate-400 w-24"># ID</th>
+                                        <th className="px-6 py-5 text-slate-700 font-black uppercase text-[10px] tracking-[0.2em] border-b border-r border-slate-400">NOMBRE DE LA SALA</th>
+                                        <th className="px-6 py-5 text-slate-700 font-black uppercase text-[10px] tracking-[0.2em] border-b border-r border-slate-400">DISPOSITIVOS</th>
+                                        <th className="px-6 py-5 text-slate-700 font-black uppercase text-[10px] tracking-[0.2em] border-b border-r border-slate-400">CREADA EL</th>
+                                        <th className="px-6 py-5 text-slate-700 font-black uppercase text-[10px] tracking-[0.2em] border-b border-slate-400 text-right">ACCIONES</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {layouts.map(l => (
-                                        <tr key={l.id} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors group">
-                                            <td className="px-6 py-5">
-                                                <span className="text-slate-500 font-mono text-sm">{l.id}</span>
+                                    {layouts.map((l, index) => (
+                                        <tr key={l.id} className={`${index % 2 === 0 ? 'bg-slate-50' : 'bg-white'} hover:bg-blue-50 transition-all group`}>
+                                            <td className="px-6 py-4 border-b border-r border-slate-400">
+                                                <span className="text-blue-600 font-mono font-bold text-sm bg-blue-100 px-2 py-1 rounded-md">{l.id}</span>
                                             </td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
-                                                        <Maximize size={18} />
-                                                    </div>
-                                                    <span className="text-white font-bold text-lg">{l.name}</span>
+                                            <td className="px-6 py-4 border-b border-r border-slate-400">
+                                                <div className="flex items-center gap-4">
+                                                    <span className="text-slate-900 font-bold text-base tracking-tight">{l.name}</span>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-5">
-                                                <span className="bg-slate-900 text-slate-400 px-3 py-1 rounded-full text-xs font-bold border border-slate-700">
-                                                    {l.data?.length || 0} dispositivos
+                                            <td className="px-6 py-4 border-b border-r border-slate-400">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-2 h-2 rounded-full bg-teal-500 shadow-[0_0_8px_rgba(20,184,166,0.3)]" />
+                                                    <span className="text-slate-700 font-medium text-sm">{l.data?.length || 0} objetos</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 border-b border-r border-slate-400">
+                                                <span className="text-slate-600 font-medium text-xs font-mono">
+                                                    {l.created_at ? new Date(l.created_at).toLocaleDateString() : '---'}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-5 text-right flex justify-end gap-2 text-white">
-                                                <button onClick={() => openLayout(l)} className="p-2 hover:bg-blue-600/20 text-blue-400 rounded-lg transition-all" title="Editar"><Maximize size={20} /></button>
-                                                <button onClick={() => deleteLayout(l.id)} className="p-2 hover:bg-red-600/20 text-red-500 rounded-lg transition-all" title="Eliminar"><Trash2 size={20} /></button>
+                                            <td className="px-6 py-4 border-b border-slate-400 text-right">
+                                                <div className="flex justify-end gap-3 translate-x-2">
+                                                    <button onClick={() => openLayout(l)} className="p-2 hover:bg-blue-100 text-blue-600 rounded-lg transition-all" title="Abrir">
+                                                        <Maximize size={18} />
+                                                    </button>
+                                                    <button onClick={() => deleteLayout(l.id)} className="p-2 hover:bg-red-100 text-red-600 rounded-lg transition-all" title="Eliminar">
+                                                        <Trash2 size={18} />
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
+                            {layouts.length === 0 && (
+                                <div className="py-20 text-center">
+                                    <Maximize size={48} className="mx-auto text-slate-200 mb-4" />
+                                    <p className="text-slate-400 text-lg font-medium">No hay salas registradas</p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
